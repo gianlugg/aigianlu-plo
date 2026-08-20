@@ -15,8 +15,13 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Recupero automatico della chiave dai Secrets di Streamlit o variabili d'ambiente
-API_KEY = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY"))
+# Recupero sicuro: se i Secrets non esistono, non crasha
+API_KEY = None
+try:
+    if "GEMINI_API_KEY" in st.secrets:
+        API_KEY = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    API_KEY = os.environ.get("GEMINI_API_KEY")
 
 def find_file_fuzzy(keywords):
     """Cerca un file nella cartella che contenga una delle parole chiave nel nome."""
@@ -30,13 +35,12 @@ def find_file_fuzzy(keywords):
         pass
     return None
 
-# Messaggi di attesa personalizzati
 SPINNER_MESSAGES = [
     "AIGIANLU ti sta per educare... attendi...",
     "Un attimo che ti spiego come si gioca a PLO...",
     "Sto preparando la cattedra per la lezione...",
     "Vediamo che disastro ha combinato Hero stavolta...",
-    "AIGIANLU sta caricando le bordate tecniche... un secondo..."
+   
 ]
 
 # --- SIDEBAR ---
@@ -47,14 +51,22 @@ with st.sidebar:
         st.image(profile_pic, use_container_width=True, caption="Gianlu in Cattedra")
     
     st.markdown("---")
-    st.markdown("#### 🎯 Room Info")
-    st.info("Benvenuto nella Review Room ufficiale di AIGIANLU. Carica lo spot per ricevere il verdetto tecnico immediato.")
+    
+    # Mostra la casella di input SOLO se la chiave non è già impostata nei Secrets
+    if not API_KEY:
+        st.markdown("#### 🔑 Chiave Gemini API")
+        user_key = st.text_input("Inserisci API Key per test locale", type="password")
+        if user_key:
+            API_KEY = user_key
+        st.markdown("[Ottieni API Key](https://aistudio.google.com/)")
+    else:
+        st.markdown("#### 🎯 Room Info")
+        st.success("✅ Modalità Cloud attiva")
 
 # --- HEADER PRINCIPALE & FOTO HOME ---
 st.title("🃏 AIGIANLU analizza la tua mano!")
 st.markdown("##### *Review tecnica street-by-street sulle giocate di Hero by Gianlu*")
 
-# Immagine trofei centrata e compatta
 trofei_path = find_file_fuzzy(["trofe", "troph", "coppe", "champion", "winner"])
 if trofei_path:
     col_left, col_center, col_right = st.columns([1, 2, 1])
@@ -135,7 +147,7 @@ with tab2:
 # --- PULSANTE DI ANALISI ---
 if st.button("🔥 AA-GIANLU analizzami lo spot", type="primary", use_container_width=True):
     if not API_KEY:
-        st.error("Chiave API non configurata nei Secrets dell'applicazione (o variabile d'ambiente mancante).")
+        st.error("Inserisci la chiave API nella barra laterale a sinistra per continuare.")
     elif not content_to_analyze:
         st.warning("Carica un'immagine o incolla il testo di una mano prima di procedere.")
     else:
