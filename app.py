@@ -15,10 +15,11 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Recupero automatico della chiave dai Secrets di Streamlit o variabili d'ambiente
+API_KEY = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY"))
+
 def find_file_fuzzy(keywords):
-    """
-    Cerca un file nella cartella che contenga una delle parole chiave nel nome.
-    """
+    """Cerca un file nella cartella che contenga una delle parole chiave nel nome."""
     try:
         files = os.listdir(BASE_DIR)
         for f in files:
@@ -29,12 +30,13 @@ def find_file_fuzzy(keywords):
         pass
     return None
 
+# Messaggi di attesa personalizzati
 SPINNER_MESSAGES = [
-    "AIGIANLU sta esaminando le scelte di Hero...",
-    "Un attimo che controllo se Hero ha regalato stack fuori posizione...",
-    "Sto verificando se Hero ha giocato un colore senza blocker...",
-    "Vediamo se Hero ha rispettato le mie size o se ha cliccato a caso...",
-    "AIGIANLU all'opera: controllo le giocate street per street..."
+    "AIGIANLU ti sta per educare... attendi...",
+    "Un attimo che ti spiego come si gioca a PLO...",
+    "Sto preparando la cattedra per la lezione...",
+    "Vediamo che disastro ha combinato Hero stavolta...",
+    "AIGIANLU sta caricando le bordate tecniche... un secondo..."
 ]
 
 # --- SIDEBAR ---
@@ -45,24 +47,19 @@ with st.sidebar:
         st.image(profile_pic, use_container_width=True, caption="Gianlu in Cattedra")
     
     st.markdown("---")
-    st.markdown("#### 🔑 Chiave Gemini API")
-    api_key = st.text_input("Inserisci API Key", type="password")
-    st.markdown("[Ottieni API Key su Google AI Studio](https://aistudio.google.com/)")
+    st.markdown("#### 🎯 Room Info")
+    st.info("Benvenuto nella Review Room ufficiale di AIGIANLU. Carica lo spot per ricevere il verdetto tecnico immediato.")
 
-# --- HEADER PRINCIPALE & FOTO HOME RIDIMENSIONATA ---
+# --- HEADER PRINCIPALE & FOTO HOME ---
 st.title("🃏 AIGIANLU analizza la tua mano!")
 st.markdown("##### *Review tecnica street-by-street sulle giocate di Hero by Gianlu*")
 
-# Inserimento immagine trofei centrata e più piccola
+# Immagine trofei centrata e compatta
 trofei_path = find_file_fuzzy(["trofe", "troph", "coppe", "champion", "winner"])
-
 if trofei_path:
     col_left, col_center, col_right = st.columns([1, 2, 1])
     with col_center:
         st.image(trofei_path, width=280, caption="🏆 AIGIANLU - Hall of Fame")
-else:
-    file_presenti = [f for f in os.listdir(BASE_DIR) if not f.endswith(".py")]
-    st.warning(f"⚠️ Immagine trofei non rilevata. File trovati: `{file_presenti}`.")
 
 st.write("---")
 
@@ -137,19 +134,19 @@ with tab2:
 
 # --- PULSANTE DI ANALISI ---
 if st.button("🔥 AA-GIANLU analizzami lo spot", type="primary", use_container_width=True):
-    if not api_key:
-        st.error("Inserisci prima la tua API Key nella barra laterale a sinistra!")
+    if not API_KEY:
+        st.error("Chiave API non configurata nei Secrets dell'applicazione (o variabile d'ambiente mancante).")
     elif not content_to_analyze:
         st.warning("Carica un'immagine o incolla il testo di una mano prima di procedere.")
     else:
         loading_box = st.empty()
         loading_img = find_file_fuzzy(["load", "attend", "caric"])
         if loading_img:
-            loading_box.image(loading_img, caption="AIGIANLU sta studiando la mano...", width=240)
+            loading_box.image(loading_img, caption="AIGIANLU sta preparando la bordata...", width=240)
 
         with st.spinner(random.choice(SPINNER_MESSAGES)):
             try:
-                client = genai.Client(api_key=api_key)
+                client = genai.Client(api_key=API_KEY)
                 data = get_ai_analysis(client, content_to_analyze)
                 
                 loading_box.empty()
@@ -206,5 +203,8 @@ if st.button("🔥 AA-GIANLU analizzami lo spot", type="primary", use_container_
 
             except Exception as e:
                 loading_box.empty()
-                st.error(f"Errore durante l'elaborazione: {e}")
-                st.error(f"Errore durante l'elaborazione: {e}")
+                err_msg = str(e)
+                if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                    st.error("⏳ Quota temporaneamente esaurita o troppe richieste contemporanee. Riprova tra poco.")
+                else:
+                    st.error(f"Errore durante l'elaborazione: {e}")
