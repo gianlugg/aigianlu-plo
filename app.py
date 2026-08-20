@@ -15,7 +15,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Recupero sicuro: se i Secrets non esistono, non crasha
+# Recupero sicuro della chiave (Secrets di Streamlit o variabile d'ambiente)
 API_KEY = None
 try:
     if "GEMINI_API_KEY" in st.secrets:
@@ -40,7 +40,7 @@ SPINNER_MESSAGES = [
     "Un attimo che ti spiego come si gioca a PLO...",
     "Sto preparando la cattedra per la lezione...",
     "Vediamo che disastro ha combinato Hero stavolta...",
-   
+    "AIGIANLU sta caricando le bordate tecniche... un secondo..."
 ]
 
 # --- SIDEBAR ---
@@ -52,7 +52,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Mostra la casella di input SOLO se la chiave non è già impostata nei Secrets
     if not API_KEY:
         st.markdown("#### 🔑 Chiave Gemini API")
         user_key = st.text_input("Inserisci API Key per test locale", type="password")
@@ -65,7 +64,7 @@ with st.sidebar:
 
 # --- HEADER PRINCIPALE & FOTO HOME ---
 st.title("🃏 AIGIANLU analizza la tua mano!")
-st.markdown("##### *Review tecnica street-by-street sulle giocate di Hero by Gianlu*")
+st.markdown("##### *Review tecnica e verdetto sulle giocate di Hero by Gianlu*")
 
 trofei_path = find_file_fuzzy(["trofe", "troph", "coppe", "champion", "winner"])
 if trofei_path:
@@ -75,41 +74,35 @@ if trofei_path:
 
 st.write("---")
 
-# --- SYSTEM PROMPT BLINDATO & STRUTTURATO ---
+# --- SYSTEM PROMPT SNELLITO ---
 SYSTEM_PROMPT = """
 Tu sei AIGIANLU: un giocatore professionista ed esperto di exploit di Pot-Limit Omaha (PLO) sul field .it.
 Stai analizzando e valutando la mano giocata da un ALTRO giocatore al tavolo ("Hero").
 
 STILE E PROSPETTIVA:
 - NON dire che la mano l'hai giocata tu. Hero è l'altro giocatore, tu sei il coach che commenta le sue scelte.
-- Usa formule come: "Qui Hero sbaglia perché...", "Hero ha scelto una linea passiva...", "Io al posto di Hero invece farei...", "La mia size qui sarebbe...".
+- Usa il tuo tono diretto, tecnico ed autorevole ("Hero qui regala chips", "La linea corretta qui è...").
 
 REGOLE CALCOLO PUNTI PLO (OBBLIGO 2+3):
 - Il punto si forma ESCLUSIVAMENTE con 2 carte della mano di Hero e 3 carte del board.
-- Non inventare Full House inesistenti: su board 6-Q-6-9-Q con una sola Q in mano ad Hero, Hero ha SOLO tris di Dame, MAI full.
-- Distingui con precisione tra single-suited e double-suited preflop.
+- Non inventare combinazioni inesistenti (es. vietato contare colori o full non validi secondo la regola 2+3).
 
 I MIEI PRINCIPI STRATEGICI (METODO GIANLU):
-1. Preflop: accetto aperture da UTG anche con coppie medio-basse purché coordinate o double-suited.
-2. Flop con scala già chiusa (es. JT7): In Position al Turn la puntata corretta è 100% POT.
-3. 3-Bet Pot OOP: dopo flop check-check, al Turn la linea standard con NFD o blocker chiave è Delayed C-Bet al 60% pot.
-4. Multiway: su board accoppiati o con colori chiusi a 4-5 giocatori, con mani marginali (colori senza Asso, semplici tris) si gioca check/fold contro aggressione.
+1. Preflop: accettare aperture UTG con carte coordinate/double-suited; selezione rigorosa del suitedness.
+2. Flop con scala già chiusa: in Position al Turn la puntata standard è 100% POT.
+3. 3-Bet Pot OOP: dopo flop check-check, Delayed C-Bet al 60% pot con draw forti/blocker.
+4. Multiway: evitare spew con mani marginali (colori bassi, tris deboli) su board coordinati o accoppiati.
 
 Assegna uno SCORE complessivo da 1 a 10 alla condotta globale di Hero.
-Suddividi l'analisi nelle street effettivamente giocate nella mano.
 
-Rispondi RIGOROSAMENTE in formato JSON valido con questa struttura:
+Rispondi RIGOROSAMENTE in formato JSON valido con questa struttura essenziale:
 {
   "score": 4,
-  "hero_hand": "carte di hero",
-  "board": "board completo",
+  "hero_hand": "carte di hero (es. As Ks Jh 9d)",
+  "board": "board completo (es. Ts 8s 2c / 4d / Kd)",
   "pot_size_bb": 0.0,
-  "giudizio_generale": "Sintesi complessiva della giocata di Hero",
-  "analisi_preflop": "Commento sulla scelta preflop di Hero",
-  "analisi_flop": "Commento sulla scelta al flop di Hero (o null se fold preflop)",
-  "analisi_turn": "Commento sulla scelta al turn di Hero (o null se mano finita prima)",
-  "analisi_river": "Commento sulla scelta al river di Hero (o null se mano finita prima)",
-  "consiglio_gianlu": "Cosa farei io esattamente al posto di Hero e con quale size specifica"
+  "giudizio_generale": "Sintesi chiara, tagliente e tecnica sulla condotta generale di Hero nello spot.",
+  "consiglio_gianlu": "Cosa farei io esattamente al posto di Hero, quale linea scegliere e con quali size precise."
 }
 """
 
@@ -118,7 +111,7 @@ def get_ai_analysis(client, content):
         model="gemini-3.6-flash",
         contents=[
             content,
-            "Analizza le decisioni di Hero street per street rispettando le regole del PLO 2+3, assegna il voto (score) e fornisci il responso in formato JSON."
+            "Analizza la mano rispettando le regole PLO 2+3, assegna il voto (score), fornisci il giudizio generale e la linea di Gianlu in formato JSON."
         ],
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
@@ -188,29 +181,13 @@ if st.button("🔥 AA-GIANLU analizzami lo spot", type="primary", use_container_
                     st.write(f"**Board:** `{data.get('board', '-')}`")
                     if data.get("pot_size_bb"):
                         st.write(f"**Piatto:** {data.get('pot_size_bb')} BB")
-                    st.info(f"**Giudizio Complessivo:** {data.get('giudizio_generale', '')}")
 
                 st.markdown("---")
-                st.subheader("🔍 Analisi Street by Street sulle scelte di Hero")
-
-                if data.get("analisi_preflop"):
-                    with st.expander("📍 PREFLOP", expanded=True):
-                        st.write(data.get("analisi_preflop"))
-
-                if data.get("analisi_flop"):
-                    with st.expander("📍 FLOP", expanded=True):
-                        st.write(data.get("analisi_flop"))
-
-                if data.get("analisi_turn"):
-                    with st.expander("📍 TURN", expanded=True):
-                        st.write(data.get("analisi_turn"))
-
-                if data.get("analisi_river"):
-                    with st.expander("📍 RIVER", expanded=True):
-                        st.write(data.get("analisi_river"))
+                st.subheader("⚖️ Giudizio Complessivo su Hero")
+                st.info(data.get("giudizio_generale", ""))
 
                 st.markdown("---")
-                st.markdown("### 💡 Come l'avrebbe giocata AIGIANLU")
+                st.subheader("💡 Come l'avrebbe giocata AIGIANLU")
                 st.success(data.get("consiglio_gianlu", ""))
 
             except Exception as e:
